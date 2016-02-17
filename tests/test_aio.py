@@ -6,6 +6,7 @@ import sys
 import asyncio
 import consul
 import consul.aio
+import consul.base as base
 
 
 Check = consul.Check
@@ -25,15 +26,109 @@ def loop(request):
 
 class TestAsyncioConsul(object):
 
+    def test_asyncio_global_timeout(self, loop, consul_port):
+
+        @asyncio.coroutine
+        def main():
+            c = consul.aio.Consul(port=consul_port, loop=loop, timeout=2)
+            response = yield from c.kv.put('gt1', 'bar')
+            assert response is True
+
+            # Get index for blocking requests
+            index, data = yield from c.kv.get('gt1')
+            index = int(index)
+
+            # Make consul wait for 5s, which should cause global timeout
+            try:
+                _, data = yield from c.kv.get('gt1', index=index+1, wait='5s')
+            except base.Timeout:
+                pass  # Expected Timeout
+
+            # Reconnect, AIO closes the session
+            c = consul.aio.Consul(port=consul_port, loop=loop, timeout=2)
+            # Wait for less than timeout, returns content
+            _, data = yield from c.kv.get('gt1', index=index+2, wait='1s')
+
+            assert data['Value'] == six.b('bar')
+
+            c.close()
+
+        loop.run_until_complete(main())
+
+    def test_asyncio_cmd_specific_override_timeout(self, loop, consul_port):
+
+        @asyncio.coroutine
+        def main():
+            c = consul.aio.Consul(port=consul_port, loop=loop, timeout=10)
+            response = yield from c.kv.put('gt2', 'bar')
+            assert response is True
+
+            # Get index for blocking requests
+            index, data = yield from c.kv.get('gt2')
+            index = int(index)
+
+            # Make consul wait for 5s, which should cause local timeout
+            try:
+                _, data = yield from c.kv.get('gt2', index=index+1, wait='5s')
+            except base.Timeout:
+                pass  # Expected Timeout
+
+            c.close()
+        loop.run_until_complete(main())
+
+    def test_asyncio_cmd_specific_timeout(self, loop, consul_port):
+
+        @asyncio.coroutine
+        def main():
+            c = consul.aio.Consul(port=consul_port, loop=loop)
+            response = yield from c.kv.put('gt3', 'bar')
+            assert response is True
+
+            # Get index for blocking requests
+            index, data = yield from c.kv.get('gt3')
+            index = int(index)
+
+            # Make consul wait for 5s, which should cause local timeout
+            try:
+                _, data = yield from c.kv.get('gt3',
+                                              index=index+1,
+                                              wait='5s',
+                                              timeout=1)
+            except base.Timeout:
+                pass  # Expected Timeout
+
+            c.close()
+
+        loop.run_until_complete(main())
+
+    def test_asyncio_cmd_specific_connect_timeout(self, loop, consul_port):
+
+        @asyncio.coroutine
+        def main():
+            try:
+                c = consul.aio.Consul(host='10.179.94.221',
+                                      port=consul_port,
+                                      loop=loop)
+                yield from c.kv.put('gt4', 'bar2', timeout=2)
+            except base.Timeout:
+                pass  # Expected Timeout
+
+            try:
+                c = consul.aio.Consul(host='10.179.94.221',
+                                      port=consul_port,
+                                      loop=loop)
+                yield from c.kv.delete('gt5', 'bar2', timeout=2)
+            except base.Timeout:
+                pass  # Expected Timeout
+
+        loop.run_until_complete(main())
+
     def test_kv(self, loop, consul_port):
 
         @asyncio.coroutine
         def main():
             c = consul.aio.Consul(port=consul_port, loop=loop)
-            print(c)
             index, data = yield from c.kv.get('foo')
-
-            print(index, data)
             assert data is None
             response = yield from c.kv.put('foo', 'bar')
             assert response is True

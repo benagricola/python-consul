@@ -7,7 +7,7 @@ import six
 
 import consul
 import consul.std
-
+import consul.base as base
 
 Check = consul.Check
 
@@ -21,6 +21,52 @@ class TestHTTPClient(object):
 
 
 class TestConsul(object):
+    def test_global_timeout(self, consul_port):
+        c = consul.Consul(port=consul_port, timeout=2)
+        assert c.kv.put('gt1', 'bar') is True
+
+        # Get index for blocking requests
+        index = int(c.kv.get('gt1')[0])
+
+        # Make consul wait for 5s, which should cause global timeout exception
+        pytest.raises(base.Timeout, c.kv.get,
+                      'gt1', index=index+1, wait='5s')
+
+        # Wait for less than timeout, returns content
+        index, data = c.kv.get('gt1', index=index+2, wait='1s')
+        assert data['Value'] == six.b('bar')
+
+    def test_cmd_specific_override_timeout(self, consul_port):
+        c = consul.Consul(port=consul_port, timeout=10)
+        assert c.kv.put('gt2', 'bar') is True
+
+        # Get index for blocking requests
+        index = int(c.kv.get('gt2')[0])
+
+        # Wait for less than global timeout but more than local timeout
+        pytest.raises(base.Timeout, c.kv.get,
+                      'gt2', index=index+1, wait='5s', timeout=1)
+
+    def test_cmd_specific_timeout(self, consul_port):
+        c = consul.Consul(port=consul_port)
+        assert c.kv.put('gt3', 'bar') is True
+
+        # Get index for blocking requests
+        index = int(c.kv.get('gt3')[0])
+
+        pytest.raises(base.Timeout, c.kv.get,
+                      'gt3', index=index+1, wait='10s', timeout=1)
+
+    def test_cmd_specific_connect_timeout(self):
+        # Attempt connection to unroutable IP. Not foolproof, but better
+        # than the alternatives
+        c = consul.Consul(host='10.179.94.221')
+
+        pytest.raises(base.Timeout, c.kv.put,
+                      'gt4', 'bar2', timeout=2)
+        pytest.raises(base.Timeout, c.kv.delete,
+                      'gt5', timeout=2)
+
     def test_kv(self, consul_port):
         c = consul.Consul(port=consul_port)
         index, data = c.kv.get('foo')
@@ -807,7 +853,7 @@ class TestConsul(object):
             set(['anonymous', master_token])
 
     def test_status_leader(self, consul_port):
-        c = consul.Consul(port=consul_port)
+        c = consul.Consul(port=consul_port, timeout=5)
 
         agent_self = c.agent.self()
         port = agent_self['Config']['Ports']['Server']
@@ -822,7 +868,7 @@ class TestConsul(object):
 
     def test_status_peers(self, consul_port):
 
-        c = consul.Consul(port=consul_port)
+        c = consul.Consul(port=consul_port, timeout=5)
 
         agent_self = c.agent.self()
         port = agent_self['Config']['Ports']['Server']

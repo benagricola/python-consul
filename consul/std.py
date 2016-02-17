@@ -4,19 +4,22 @@ import requests
 
 from consul import base
 
+ReadTimeout = requests.exceptions.ReadTimeout
+ConnectTimeout = requests.exceptions.ConnectTimeout
 
 __all__ = ['Consul']
 
 
 class HTTPClient(object):
     def __init__(self, host='127.0.0.1', port=8500, scheme='http',
-                 verify=True):
+                 verify=True, timeout=None):
         self.host = host
         self.port = port
         self.scheme = scheme
         self.verify = verify
         self.base_uri = '%s://%s:%s' % (self.scheme, self.host, self.port)
         self.session = requests.session()
+        self.timeout = timeout
 
     def response(self, response):
         return base.Response(
@@ -28,22 +31,38 @@ class HTTPClient(object):
             return uri
         return '%s?%s' % (uri, urllib.parse.urlencode(params))
 
-    def get(self, callback, path, params=None):
+    def get(self, callback, path, params=None, timeout=None):
         uri = self.uri(path, params)
-        return callback(self.response(
-            self.session.get(uri, verify=self.verify)))
+        timeout = timeout if timeout else self.timeout
+        try:
+            return callback(self.response(
+                self.session.get(uri, verify=self.verify, timeout=timeout)))
+        except (ConnectTimeout, ReadTimeout):
+            raise base.Timeout
 
-    def put(self, callback, path, params=None, data=''):
+    def put(self, callback, path, params=None, data='', timeout=None):
         uri = self.uri(path, params)
-        return callback(self.response(
-            self.session.put(uri, data=data, verify=self.verify)))
+        timeout = timeout if timeout else self.timeout
+        try:
+            return callback(self.response(
+                self.session.put(
+                    uri,
+                    data=data,
+                    verify=self.verify,
+                    timeout=timeout)))
+        except (ConnectTimeout, ReadTimeout):
+            raise base.Timeout
 
-    def delete(self, callback, path, params=None):
+    def delete(self, callback, path, params=None, timeout=None):
         uri = self.uri(path, params)
-        return callback(self.response(
-            self.session.delete(uri, verify=self.verify)))
+        timeout = timeout if timeout else self.timeout
+        try:
+            return callback(self.response(
+                self.session.delete(uri, verify=self.verify, timeout=timeout)))
+        except (ConnectTimeout, ReadTimeout):
+            raise base.Timeout
 
 
 class Consul(base.Consul):
-    def connect(self, host, port, scheme, verify=True):
-        return HTTPClient(host, port, scheme, verify)
+    def connect(self, host, port, scheme, verify=True, timeout=None):
+        return HTTPClient(host, port, scheme, verify, timeout)

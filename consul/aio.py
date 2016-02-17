@@ -21,7 +21,8 @@ class HTTPClient:
             port=8500,
             scheme='http',
             loop=None,
-            verify=True):
+            verify=True,
+            timeout=None):
         self.host = host
         self.port = port
         self.scheme = scheme
@@ -29,6 +30,7 @@ class HTTPClient:
         self._loop = loop or asyncio.get_event_loop()
         self._connector = aiohttp.TCPConnector(loop=self._loop,
                                                verify_ssl=verify)
+        self.timeout = timeout
 
     def _uri(self, path, params=None):
         uri = self.base_uri + path
@@ -37,15 +39,28 @@ class HTTPClient:
         return '%s?%s' % (uri, urllib.parse.urlencode(params))
 
     @asyncio.coroutine
-    def _request(self, callback, method, uri, data=None):
-        resp = yield from aiohttp.request(method, uri,
-                                          connector=self._connector,
-                                          data=data, loop=self._loop)
-        body = yield from resp.text(encoding='utf-8')
-        if resp.status == 599:
+    def _request(self, callback, method, uri, data=None, timeout=None):
+        try:
+            if timeout:
+                with aiohttp.Timeout(timeout, loop=self._loop):
+                    resp = yield from \
+                        aiohttp.request(method, uri,
+                                        connector=self._connector,
+                                        data=data,
+                                        loop=self._loop)
+            else:
+                resp = yield from \
+                    aiohttp.request(method, uri,
+                                    connector=self._connector,
+                                    data=data,
+                                    loop=self._loop)
+            body = yield from resp.text(encoding='utf-8')
+            if resp.status == 599:
+                raise base.Timeout
+            r = base.Response(resp.status, resp.headers, body)
+            return callback(r)
+        except (asyncio.TimeoutError):
             raise base.Timeout
-        r = base.Response(resp.status, resp.headers, body)
-        return callback(r)
 
     # python prior 3.4.1 does not play nice with __del__ method
     if PY_341:  # pragma: no branch
@@ -55,17 +70,20 @@ class HTTPClient:
                               ResourceWarning)
                 self.close()
 
-    def get(self, callback, path, params=None):
+    def get(self, callback, path, params=None, timeout=None):
         uri = self._uri(path, params)
-        return self._request(callback, 'GET', uri)
+        timeout = timeout if timeout else self.timeout
+        return self._request(callback, 'GET', uri, timeout=timeout)
 
-    def put(self, callback, path, params=None, data=''):
+    def put(self, callback, path, params=None, data='', timeout=None):
         uri = self._uri(path, params)
-        return self._request(callback, 'PUT', uri, data=data)
+        timeout = timeout if timeout else self.timeout
+        return self._request(callback, 'PUT', uri, data=data, timeout=timeout)
 
-    def delete(self, callback, path, params=None):
+    def delete(self, callback, path, params=None, timeout=None):
         uri = self._uri(path, params)
-        return self._request(callback, 'DELETE', uri)
+        timeout = timeout if timeout else self.timeout
+        return self._request(callback, 'DELETE', uri, timeout=timeout)
 
     def close(self):
         self._connector.close()
@@ -77,8 +95,13 @@ class Consul(base.Consul):
         self._loop = loop or asyncio.get_event_loop()
         super().__init__(*args, **kwargs)
 
-    def connect(self, host, port, scheme, verify=True):
-        return HTTPClient(host, port, scheme, loop=self._loop, verify=verify)
+    def connect(self, host, port, scheme, verify=True, timeout=None):
+        return HTTPClient(host,
+                          port,
+                          scheme,
+                          loop=self._loop,
+                          verify=verify,
+                          timeout=timeout)
 
     def close(self):
         """Close all opened http connections"""
