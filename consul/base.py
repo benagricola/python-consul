@@ -171,7 +171,8 @@ class Consul(object):
             scheme='http',
             consistency='default',
             dc=None,
-            verify=True):
+            verify=True,
+            timeout=None):
         """
         *token* is an optional `ACL token`_. If supplied it will be used by
         default for all requests made with this client session. It's still
@@ -187,6 +188,8 @@ class Consul(object):
         By default the datacenter of the host is used.
 
         *verify* is whether to verify the SSL certificate for HTTPS requests
+
+        *timeout* is the timeout applied to HTTP requests
         """
 
         # TODO: Status
@@ -199,7 +202,8 @@ class Consul(object):
         if os.getenv('CONSUL_HTTP_SSL_VERIFY') is not None:
             verify = os.getenv('CONSUL_HTTP_SSL_VERIFY') == 'true'
 
-        self.http = self.connect(host, port, scheme, verify)
+        self.timeout = timeout
+        self.http = self.connect(host, port, scheme, verify, timeout)
         self.token = os.getenv('CONSUL_HTTP_TOKEN', token)
         self.scheme = scheme
         self.dc = dc
@@ -239,7 +243,8 @@ class Consul(object):
                 body="",
                 node=None,
                 service=None,
-                tag=None):
+                tag=None,
+                timeout=None):
             """
             Sends an event to Consul's gossip protocol.
 
@@ -257,6 +262,11 @@ class Consul(object):
             *node*, *service*, and *tag* are regular expressions which remote
             agents will filter against to determine if they should store the
             event
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
             assert not name.startswith('/'), \
                 'keys should not start with a forward slash'
@@ -270,13 +280,14 @@ class Consul(object):
 
             return self.agent.http.put(
                 callback(is_json=True),
-                '/v1/event/fire/%s' % name, params=params, data=body)
+                '/v1/event/fire/%s' % name, params=params, data=body, timeout=timeout)
 
         def list(
                 self,
                 name=None,
                 index=None,
-                wait=None):
+                wait=None,
+                timeout=None):
             """
             Returns a tuple of (*index*, *events*)
                 Note: Since Consul's event protocol uses gossip, there is no
@@ -293,6 +304,11 @@ class Consul(object):
             *wait* the maximum duration to wait (e.g. '10s') to retrieve
             a given index. This parameter is only applied if *index* is also
             specified. the wait time by default is 5 minutes.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             Consul agents only buffer the most recent entries. The current
             buffer size is 256, but this value could change in the future.
@@ -328,7 +344,7 @@ class Consul(object):
                 return response.headers['X-Consul-Index'], data
 
             return self.agent.http.get(
-                callback, '/v1/event/list', params=params)
+                callback, '/v1/event/list', params=params,timeout=timeout)
 
     class KV(object):
         """
@@ -349,7 +365,8 @@ class Consul(object):
                 consistency=None,
                 keys=False,
                 separator=None,
-                dc=None):
+                dc=None,
+                timeout=None):
             """
             Returns a tuple of (*index*, *value[s]*)
 
@@ -368,6 +385,11 @@ class Consul(object):
 
             *dc* is the optional datacenter that you wish to communicate with.
             If None is provided, defaults to the agent's datacenter.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             The *value* returned is for the specified key, or if *recurse* is
             True a list of *values* for all keys with the given prefix is
@@ -428,7 +450,7 @@ class Consul(object):
                 return response.headers['X-Consul-Index'], data
 
             return self.agent.http.get(
-                callback, '/v1/kv/%s' % key, params=params)
+                callback, '/v1/kv/%s' % key, params=params, timeout=timeout)
 
         def put(
                 self,
@@ -439,7 +461,8 @@ class Consul(object):
                 acquire=None,
                 release=None,
                 token=None,
-                dc=None):
+                dc=None,
+                timeout=None):
             """
             Sets *key* to the given *value*.
 
@@ -470,6 +493,11 @@ class Consul(object):
             *dc* is the optional datacenter that you wish to communicate with.
             If None is provided, defaults to the agent's datacenter.
 
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
+
             The return value is simply either True or False. If False is
             returned, then the update has not taken place.
             """
@@ -496,9 +524,9 @@ class Consul(object):
                 params['dc'] = dc
             return self.agent.http.put(
                 callback(is_json=True),
-                '/v1/kv/%s' % key, params=params, data=value)
+                '/v1/kv/%s' % key, params=params, data=value, timeout=timeout)
 
-        def delete(self, key, recurse=None, cas=None, token=None, dc=None):
+        def delete(self, key, recurse=None, cas=None, token=None, dc=None, timeout=None):
             """
             Deletes a single key or if *recurse* is True, all keys sharing a
             prefix.
@@ -516,6 +544,11 @@ class Consul(object):
 
             *dc* is the optional datacenter that you wish to communicate with.
             If None is provided, defaults to the agent's datacenter.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
             assert not key.startswith('/'), \
                 'keys should not start with a forward slash'
@@ -538,7 +571,7 @@ class Consul(object):
                 return json.loads(response.body)
 
             return self.agent.http.delete(
-                callback, '/v1/kv/%s' % key, params=params)
+                callback, '/v1/kv/%s' % key, params=params, timeout=timeout)
 
     class Agent(object):
         """
@@ -552,15 +585,25 @@ class Consul(object):
             self.service = Consul.Agent.Service(agent)
             self.check = Consul.Agent.Check(agent)
 
-        def self(self):
+        def self(self,timeout=None):
             """
             Returns configuration of the local agent and member information.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
             return self.agent.http.get(
-                lambda x: json.loads(x.body), '/v1/agent/self')
+                lambda x: json.loads(x.body), '/v1/agent/self', timeout=timeout)
 
-        def services(self):
+        def services(self,timeout=None):
             """
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
+
             Returns all the services that are registered with the local agent.
             These services were either provided through configuration files, or
             added dynamically using the HTTP API. It is important to note that
@@ -571,10 +614,15 @@ class Consul(object):
             within a few seconds.
             """
             return self.agent.http.get(
-                lambda x: json.loads(x.body), '/v1/agent/services')
+                lambda x: json.loads(x.body), '/v1/agent/services', timeout=timeout)
 
-        def checks(self):
+        def checks(self,timeout=None):
             """
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
+
             Returns all the checks that are registered with the local agent.
             These checks were either provided through configuration files, or
             added dynamically using the HTTP API. Similar to services,
@@ -585,10 +633,15 @@ class Consul(object):
             within a few seconds.
             """
             return self.agent.http.get(
-                lambda x: json.loads(x.body), '/v1/agent/checks')
+                lambda x: json.loads(x.body), '/v1/agent/checks', timeout=timeout)
 
-        def members(self, wan=False):
+        def members(self, wan=False, timeout=None):
             """
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
+
             Returns all the members that this agent currently sees. This may
             vary by agent, use the nodes api of Catalog to retrieve a cluster
             wide consistent view of members.
@@ -604,12 +657,17 @@ class Consul(object):
             return self.agent.http.get(
                 lambda x: json.loads(x.body),
                 '/v1/agent/members',
-                params=params)
+                params=params,timeout=timeout)
 
-        def maintenance(self, enable, reason=None):
+        def maintenance(self, enable, reason=None, timeout=None):
             """
             The node maintenance endpoint can place the agent into
             "maintenance mode".
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             *enable* is either 'true' or 'false'. 'true' enables maintenance
             mode, 'false' disables maintenance mode.
@@ -627,12 +685,17 @@ class Consul(object):
             return self.agent.http.put(
                 lambda x: x.code == 200,
                 '/v1/agent/maintenance',
-                params=params)
+                params=params, timeout=timeout)
 
-        def join(self, address, wan=False):
+        def join(self, address, wan=False, timeout=None):
             """
             This endpoint instructs the agent to attempt to connect to a
             given address.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             *address* is the ip to connect to.
 
@@ -649,9 +712,9 @@ class Consul(object):
             return self.agent.http.get(
                 lambda x: x.code == 200,
                 '/v1/agent/join/%s' % address,
-                params=params)
+                params=params, timeout=timeout)
 
-        def force_leave(self, node):
+        def force_leave(self, node, timeout=None):
             """
             This endpoint instructs the agent to force a node into the left
             state. If a node fails unexpectedly, then it will be in a failed
@@ -661,11 +724,16 @@ class Consul(object):
             entries to be removed.
 
             *node* is the node to change state for.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
 
             return self.agent.http.get(
                 lambda x: x.code == 200,
-                '/v1/agent/force-leave/%s' % node)
+                '/v1/agent/force-leave/%s' % node, timeout=timeout)
 
         class Service(object):
             def __init__(self, agent):
@@ -710,6 +778,11 @@ class Consul(object):
 
                 *script*, *interval*, *ttl*, *http*, and *timeout* arguments
                 are deprecated. use *check* instead.
+
+                *timeout* - If *check* is specified, this argument is
+                the optional timeout for HTTP requests made to Consul. If
+                *check* is not specified, this argument is treated as the
+                deprecated *timeout* argument above which creates a check.
                 """
                 payload = {'name': name}
                 if service_id:
@@ -721,9 +794,13 @@ class Consul(object):
                 if tags:
                     payload['tags'] = tags
 
+                # If new 'check' object is used, treat timeout field as 
+                # http timeout for requests. Otherwise set default timeout
+                http_timeout = None
+
                 if check:
                     payload['check'] = check
-
+                    http_timeout = timeout
                 else:
                     payload.update(Check._compat(
                         script=script,
@@ -741,19 +818,24 @@ class Consul(object):
                     lambda x: x.code == 200,
                     '/v1/agent/service/register',
                     params=params,
-                    data=json.dumps(payload))
+                    data=json.dumps(payload), timeout=http_timeout)
 
-            def deregister(self, service_id):
+            def deregister(self, service_id, timeout=None):
                 """
                 Used to remove a service from the local agent. The agent will
                 take care of deregistering the service with the Catalog. If
                 there is an associated check, that is also deregistered.
+
+                *timeout* is the optional timeout for HTTP requests made to Consul.
+                If None is provided, defaults to timeout value set when
+                instantiating consul instance, or the default value set in
+                requests.
                 """
                 return self.agent.http.get(
                     lambda x: x.code == 200,
-                    '/v1/agent/service/deregister/%s' % service_id)
+                    '/v1/agent/service/deregister/%s' % service_id, timeout=timeout)
 
-            def maintenance(self, service_id, enable, reason=None):
+            def maintenance(self, service_id, enable, reason=None, timeout=None):
                 """
                 The service maintenance endpoint allows placing a given service
                 into "maintenance mode".
@@ -766,6 +848,11 @@ class Consul(object):
 
                 *reason* is an optional string. This is simply to aid human
                 operators.
+
+                *timeout* is the optional timeout for HTTP requests made to Consul.
+                If None is provided, defaults to timeout value set when
+                instantiating consul instance, or the default value set in
+                requests.
                 """
 
                 params = {}
@@ -777,7 +864,8 @@ class Consul(object):
                 return self.agent.http.put(
                     lambda x: x.code == 200,
                     '/v1/agent/service/maintenance/{0}'.format(service_id),
-                    params=params)
+                    params=params,
+                    timeout=timeout)
 
         class Check(object):
             def __init__(self, agent):
@@ -823,6 +911,11 @@ class Consul(object):
                 *script*, *interval*, *ttl*, *http*, and *timeout* arguments
                 are deprecated. use *check* instead.
 
+                *timeout* - If *check* is specified, this argument is
+                the optional timeout for HTTP requests made to Consul. If
+                *check* is not specified, this argument is treated as the
+                deprecated *timeout* argument above which creates a check.
+
                 Returns *True* on success.
                 """
                 payload = {'name': name}
@@ -830,7 +923,12 @@ class Consul(object):
                 assert check or script or ttl or http, \
                     'check is required'
 
+                # If new 'check' object is used, treat timeout field as 
+                # http timeout for requests. Otherwise set default timeout
+                http_timeout = None
+
                 if check:
+                    http_timeout = timeout
                     payload.update(check)
 
                 else:
@@ -857,20 +955,32 @@ class Consul(object):
                     lambda x: x.code == 200,
                     '/v1/agent/check/register',
                     params=params,
-                    data=json.dumps(payload))
+                    data=json.dumps(payload),
+                    timeout=http_timeout)
 
-            def deregister(self, check_id):
+            def deregister(self, check_id, timeout=None):
                 """
                 Remove a check from the local agent.
+
+                *timeout* is the optional timeout for HTTP requests made to Consul.
+                If None is provided, defaults to timeout value set when
+                instantiating consul instance, or the default value set in
+                requests.
                 """
                 return self.agent.http.get(
                     lambda x: x.code == 200,
-                    '/v1/agent/check/deregister/%s' % check_id)
+                    '/v1/agent/check/deregister/%s' % check_id,
+                    timeout=timeout)
 
-            def ttl_pass(self, check_id, notes=None):
+            def ttl_pass(self, check_id, notes=None, timeout=None):
                 """
                 Mark a ttl based check as passing. Optional notes can be
                 attached to describe the status of the check.
+
+                *timeout* is the optional timeout for HTTP requests made to Consul.
+                If None is provided, defaults to timeout value set when
+                instantiating consul instance, or the default value set in
+                requests.
                 """
                 params = {}
                 if notes:
@@ -879,13 +989,19 @@ class Consul(object):
                 return self.agent.http.get(
                     lambda x: x.code == 200,
                     '/v1/agent/check/pass/%s' % check_id,
-                    params=params)
+                    params=params,
+                    timeout=timeout)
 
-            def ttl_fail(self, check_id, notes=None):
+            def ttl_fail(self, check_id, notes=None, timeout=None):
                 """
                 Mark a ttl based check as failing. Optional notes can be
                 attached to describe why check is failing. The status of the
                 check will be set to critical and the ttl clock will be reset.
+
+                *timeout* is the optional timeout for HTTP requests made to Consul.
+                If None is provided, defaults to timeout value set when
+                instantiating consul instance, or the default value set in
+                requests.
                 """
                 params = {}
                 if notes:
@@ -894,13 +1010,19 @@ class Consul(object):
                 return self.agent.http.get(
                     lambda x: x.code == 200,
                     '/v1/agent/check/fail/%s' % check_id,
-                    params=params)
+                    params=params,
+                    timeout=timeout)
 
-            def ttl_warn(self, check_id, notes=None):
+            def ttl_warn(self, check_id, notes=None, timeout=None):
                 """
                 Mark a ttl based check with warning. Optional notes can be
                 attached to describe the warning. The status of the
                 check will be set to warn and the ttl clock will be reset.
+
+                *timeout* is the optional timeout for HTTP requests made to Consul.
+                If None is provided, defaults to timeout value set when
+                instantiating consul instance, or the default value set in
+                requests.
                 """
                 params = {}
                 if notes:
@@ -909,13 +1031,14 @@ class Consul(object):
                 return self.agent.http.get(
                     lambda x: x.code == 200,
                     '/v1/agent/check/warn/%s' % check_id,
-                    params=params)
+                    params=params,
+                    timeout=timeout)
 
     class Catalog(object):
         def __init__(self, agent):
             self.agent = agent
 
-        def register(self, node, address, service=None, check=None, dc=None):
+        def register(self, node, address, service=None, check=None, dc=None, timeout=None):
             """
             A low level mechanism for directly registering or updating entries
             in the catalog. It is usually recommended to use
@@ -963,6 +1086,11 @@ class Consul(object):
             *dc* is the datacenter of the node and defaults to this agents
             datacenter.
 
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
+
             This manipulates the health check entry, but does not setup a
             script or TTL to actually update the status. The full documentation
             is `here <https://consul.io/docs/agent/http.html#catalog>`_.
@@ -979,9 +1107,15 @@ class Consul(object):
                 data['check'] = check
             return self.agent.http.put(
                 callback(is_200=True),
-                '/v1/catalog/register', data=json.dumps(data))
+                '/v1/catalog/register', data=json.dumps(data), timeout=timeout)
 
-        def deregister(self, node, service_id=None, check_id=None, dc=None):
+        def deregister(
+                self,
+                node,
+                service_id=None,
+                check_id=None,
+                dc=None,
+                timeout=None):
             """
             A low level mechanism for directly removing entries in the catalog.
             It is usually recommended to use the agent APIs, as they are
@@ -992,6 +1126,11 @@ class Consul(object):
             services and checks are deleted. Otherwise only one of *service_id*
             and *check_id* should be provided and only that service or check
             will be removed.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             Returns *True* on success.
             """
@@ -1006,16 +1145,29 @@ class Consul(object):
                 data['checkid'] = check_id
             return self.agent.http.put(
                 callback(is_200=True),
-                '/v1/catalog/deregister', data=json.dumps(data))
+                '/v1/catalog/deregister', data=json.dumps(data),
+                timeout=timeout)
 
-        def datacenters(self):
+        def datacenters(self, timeout=None):
             """
             Returns all the datacenters that are known by the Consul server.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
             return self.agent.http.get(
-                lambda x: json.loads(x.body), '/v1/catalog/datacenters')
+                lambda x: json.loads(x.body), '/v1/catalog/datacenters',
+                timeout=timeout)
 
-        def nodes(self, index=None, wait=None, consistency=None, dc=None):
+        def nodes(
+                self,
+                index=None,
+                wait=None,
+                consistency=None,
+                dc=None,
+                timeout=None):
             """
             Returns a tuple of (*index*, *nodes*) of all nodes known
             about in the *dc* datacenter. *dc* defaults to the current
@@ -1031,6 +1183,11 @@ class Consul(object):
             *consistency* can be either 'default', 'consistent' or 'stale'. if
             not specified *consistency* will the consistency level this client
             was configured with.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             The response looks like this::
 
@@ -1058,9 +1215,15 @@ class Consul(object):
                 params[consistency] = '1'
             return self.agent.http.get(
                 callback(is_json=True, index=True),
-                '/v1/catalog/nodes', params=params)
+                '/v1/catalog/nodes', params=params, timeout=timeout)
 
-        def services(self, index=None, wait=None, consistency=None, dc=None):
+        def services(
+                self,
+                index=None,
+                wait=None,
+                consistency=None,
+                dc=None,
+                timeout=None):
             """
             Returns a tuple of (*index*, *services*) of all services known
             about in the *dc* datacenter. *dc* defaults to the current
@@ -1076,6 +1239,11 @@ class Consul(object):
             *consistency* can be either 'default', 'consistent' or 'stale'. if
             not specified *consistency* will the consistency level this client
             was configured with.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             The response looks like this::
 
@@ -1104,9 +1272,16 @@ class Consul(object):
                 params[consistency] = '1'
             return self.agent.http.get(
                 callback(is_json=True, index=True),
-                '/v1/catalog/services', params=params)
+                '/v1/catalog/services', params=params, timeout=timeout)
 
-        def node(self, node, index=None, wait=None, consistency=None, dc=None):
+        def node(
+                self,
+                node,
+                index=None,
+                wait=None,
+                consistency=None,
+                dc=None,
+                timeout=None):
             """
             Returns a tuple of (*index*, *services*) of all services provided
             by *node*.
@@ -1124,6 +1299,11 @@ class Consul(object):
 
             *dc* is the datacenter of the node and defaults to this agents
             datacenter.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             The response looks like this::
 
@@ -1163,7 +1343,7 @@ class Consul(object):
                 params[consistency] = '1'
             return self.agent.http.get(
                 callback(is_json=True, index=True),
-                '/v1/catalog/node/%s' % node, params=params)
+                '/v1/catalog/node/%s' % node, params=params, timeout=timeout)
 
         def service(
                 self,
@@ -1172,7 +1352,8 @@ class Consul(object):
                 wait=None,
                 tag=None,
                 consistency=None,
-                dc=None):
+                dc=None,
+                timeout=None):
             """
             Returns a tuple of (*index*, *nodes*) of the nodes providing
             *service* in the *dc* datacenter. *dc* defaults to the current
@@ -1191,6 +1372,11 @@ class Consul(object):
             *consistency* can be either 'default', 'consistent' or 'stale'. if
             not specified *consistency* will the consistency level this client
             was configured with.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             The response looks like this::
 
@@ -1220,7 +1406,9 @@ class Consul(object):
                 params[consistency] = '1'
             return self.agent.http.get(
                 callback(is_json=True, index=True),
-                '/v1/catalog/service/%s' % service, params=params)
+                '/v1/catalog/service/%s' % service,
+                params=params,
+                timeout=timeout)
 
     class Health(object):
         # TODO: All of the health endpoints support all consistency modes
@@ -1233,7 +1421,8 @@ class Consul(object):
                     wait=None,
                     passing=None,
                     tag=None,
-                    dc=None):
+                    dc=None,
+                    timeout=None):
             """
             Returns a tuple of (*index*, *nodes*)
 
@@ -1253,6 +1442,11 @@ class Consul(object):
 
             *dc* is the datacenter of the node and defaults to this agents
             datacenter.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
             params = {}
             if index:
@@ -1273,9 +1467,11 @@ class Consul(object):
 
             return self.agent.http.get(
                 callback,
-                '/v1/health/service/%s' % service, params=params)
+                '/v1/health/service/%s' % service, 
+                params=params, 
+                timeout=timeout)
 
-        def checks(self, service, index=None, wait=None, dc=None):
+        def checks(self, service, index=None, wait=None, dc=None, timeout=None):
             """
             Returns a tuple of (*index*, *checks*) with *checks* being the
             checks associated with the service.
@@ -1291,6 +1487,11 @@ class Consul(object):
 
             *dc* is the datacenter of the node and defaults to this agents
             datacenter.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             """
             params = {}
@@ -1308,9 +1509,11 @@ class Consul(object):
 
             return self.agent.http.get(
                 callback,
-                '/v1/health/checks/%s' % service, params=params)
+                '/v1/health/checks/%s' % service,
+                params=params,
+                timeout=timeout)
 
-        def state(self, name, index=None, wait=None, dc=None):
+        def state(self, name, index=None, wait=None, dc=None, timeout=None):
             """
             Returns a tuple of (*index*, *nodes*)
 
@@ -1331,6 +1534,11 @@ class Consul(object):
             datacenter.
 
             *nodes* are the nodes providing the given service.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
             assert name in ['any', 'unknown', 'passing', 'warning', 'critical']
             params = {}
@@ -1348,9 +1556,9 @@ class Consul(object):
 
             return self.agent.http.get(
                 callback,
-                '/v1/health/state/%s' % name, params=params)
+                '/v1/health/state/%s' % name, params=params, timeout=timeout)
 
-        def node(self, node, index=None, wait=None, dc=None):
+        def node(self, node, index=None, wait=None, dc=None, timeout=None):
             """
             Returns a tuple of (*index*, *checks*)
 
@@ -1365,6 +1573,11 @@ class Consul(object):
             datacenter.
 
             *nodes* are the nodes providing the given service.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
             params = {}
             if index:
@@ -1381,7 +1594,7 @@ class Consul(object):
 
             return self.agent.http.get(
                 callback,
-                '/v1/health/node/%s' % node, params=params)
+                '/v1/health/node/%s' % node, params=params, timeout=timeout)
 
     class Session(object):
         def __init__(self, agent):
@@ -1395,7 +1608,8 @@ class Consul(object):
                 lock_delay=15,
                 behavior='release',
                 ttl=None,
-                dc=None):
+                dc=None,
+                timeout=None):
             """
             Creates a new session. There is more documentation for sessions
             `here <https://consul.io/docs/internals/sessions.html>`_.
@@ -1426,6 +1640,11 @@ class Consul(object):
             By default the session will be created in the current datacenter
             but an optional *dc* can be provided.
 
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
+
             Returns the string *session_id* for the session.
             """
             params = {}
@@ -1454,11 +1673,16 @@ class Consul(object):
                 data = ''
             return self.agent.http.put(
                 callback(lambda x: json.loads(x.body)['ID']),
-                '/v1/session/create', params=params, data=data)
+                '/v1/session/create', params=params, data=data, timeout=timeout)
 
-        def destroy(self, session_id, dc=None):
+        def destroy(self, session_id, dc=None, timeout=None):
             """
             Destroys the session *session_id*
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             Returns *True* on success.
             """
@@ -1468,9 +1692,17 @@ class Consul(object):
                 params['dc'] = dc
             return self.agent.http.put(
                 callback(is_200=True),
-                '/v1/session/destroy/%s' % session_id, params=params)
+                '/v1/session/destroy/%s' % session_id,
+                params=params,
+                timeout=timeout)
 
-        def list(self, index=None, wait=None, consistency=None, dc=None):
+        def list(
+                self,
+                index=None,
+                wait=None,
+                consistency=None,
+                dc=None,
+                timeout=None):
             """
             Returns a tuple of (*index*, *sessions*) of all active sessions in
             the *dc* datacenter. *dc* defaults to the current datacenter of
@@ -1486,6 +1718,11 @@ class Consul(object):
             *consistency* can be either 'default', 'consistent' or 'stale'. if
             not specified *consistency* will the consistency level this client
             was configured with.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             The response looks like this::
 
@@ -1515,9 +1752,16 @@ class Consul(object):
                 params[consistency] = '1'
             return self.agent.http.get(
                 callback(is_json=True, index=True),
-                '/v1/session/list', params=params)
+                '/v1/session/list', params=params, timeout=timeout)
 
-        def node(self, node, index=None, wait=None, consistency=None, dc=None):
+        def node(
+                self,
+                node,
+                index=None,
+                wait=None,
+                consistency=None,
+                dc=None,
+                timeout=None):
             """
             Returns a tuple of (*index*, *sessions*) as per *session.list*, but
             filters the sessions returned to only those active for *node*.
@@ -1532,6 +1776,11 @@ class Consul(object):
             *consistency* can be either 'default', 'consistent' or 'stale'. if
             not specified *consistency* will the consistency level this client
             was configured with.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
             params = {}
             dc = dc or self.agent.dc
@@ -1546,14 +1795,15 @@ class Consul(object):
                 params[consistency] = '1'
             return self.agent.http.get(
                 callback(is_json=True, index=True),
-                '/v1/session/node/%s' % node, params=params)
+                '/v1/session/node/%s' % node, params=params, timeout=timeout)
 
         def info(self,
                  session_id,
                  index=None,
                  wait=None,
                  consistency=None,
-                 dc=None):
+                 dc=None,
+                 timeout=None):
             """
             Returns a tuple of (*index*, *session*) for the session
             *session_id* in the *dc* datacenter. *dc* defaults to the current
@@ -1569,6 +1819,11 @@ class Consul(object):
             *consistency* can be either 'default', 'consistent' or 'stale'. if
             not specified *consistency* will the consistency level this client
             was configured with.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
             params = {}
             dc = dc or self.agent.dc
@@ -1583,15 +1838,22 @@ class Consul(object):
                 params[consistency] = '1'
             return self.agent.http.get(
                 callback(is_json=True, index=True, one=True),
-                '/v1/session/info/%s' % session_id, params=params)
+                '/v1/session/info/%s' % session_id,
+                params=params,
+                timeout=timeout)
 
-        def renew(self, session_id, dc=None):
+        def renew(self, session_id, dc=None, timeout=None):
             """
             This is used with sessions that have a TTL, and it extends the
             expiration by the TTL.
 
             *dc* is the optional datacenter that you wish to communicate with.
             If None is provided, defaults to the agent's datacenter.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             Returns the session.
             """
@@ -1601,18 +1863,25 @@ class Consul(object):
                 params['dc'] = dc
             return self.agent.http.put(
                 callback(is_json=True, one=True, allow_404=False),
-                '/v1/session/renew/%s' % session_id, params=params)
+                '/v1/session/renew/%s' % session_id,
+                params=params,
+                timeout=timeout)
 
     class ACL(object):
         def __init__(self, agent):
             self.agent = agent
 
-        def list(self, token=None):
+        def list(self, token=None, timeout=None):
             """
             Lists all the active ACL tokens. This is a privileged endpoint, and
             requires a management token. *token* will override this client's
             default token.  An *ACLPermissionDenied* exception will be raised
             if a management token is not used.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
             params = {}
             token = token or self.agent.token
@@ -1626,11 +1895,20 @@ class Consul(object):
                     raise ACLPermissionDenied(response.body)
                 return json.loads(response.body)
 
-            return self.agent.http.get(callback, '/v1/acl/list', params=params)
+            return self.agent.http.get(
+                callback, 
+                '/v1/acl/list', 
+                params=params,
+                timeout=timeout)
 
-        def info(self, acl_id, token=None):
+        def info(self, acl_id, token=None, timeout=None):
             """
             Returns the token information for *acl_id*.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
             params = {}
             token = token or self.agent.token
@@ -1645,14 +1923,18 @@ class Consul(object):
                     return response[0]
 
             return self.agent.http.get(
-                callback, '/v1/acl/info/%s' % acl_id, params=params)
+                callback,
+                '/v1/acl/info/%s' % acl_id,
+                params=params,
+                timeout=timeout)
 
         def create(self,
                    name=None,
                    type='client',
                    rules=None,
                    acl_id=None,
-                   token=None):
+                   token=None,
+                   timeout=None):
             """
             Creates a new ACL token. This is a privileged endpoint, and
             requires a management token. *token* will override this client's
@@ -1682,6 +1964,11 @@ class Consul(object):
                   # Deny access to the private dir
                   policy = "deny"
                 }
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             Returns the string *acl_id* for the new token.
             """
@@ -1717,9 +2004,20 @@ class Consul(object):
                 return json.loads(response.body)['ID']
 
             return self.agent.http.put(
-                callback, '/v1/acl/create', params=params, data=data)
+                callback,
+                '/v1/acl/create',
+                params=params,
+                data=data,
+                timeout=timeout)
 
-        def update(self, acl_id, name=None, type=None, rules=None, token=None):
+        def update(
+                self,
+                acl_id,
+                name=None,
+                type=None,
+                rules=None,
+                token=None,
+                timeout=None):
             """
             Updates the ACL token *acl_id*. This is a privileged endpoint, and
             requires a management token. *token* will override this client's
@@ -1735,6 +2033,11 @@ class Consul(object):
 
             *rules* is an optional `HCL`_ string for this `ACL Token`_ Rule
             Specification.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             Returns the string *acl_id* of this token on success.
             """
@@ -1765,14 +2068,23 @@ class Consul(object):
                 return json.loads(response.body)['ID']
 
             return self.agent.http.put(
-                callback, '/v1/acl/update', params=params, data=data)
+                callback,
+                '/v1/acl/update',
+                params=params,
+                data=data,
+                timeout=timeout)
 
-        def clone(self, acl_id, token=None):
+        def clone(self, acl_id, token=None, timeout=None):
             """
             Clones the ACL token *acl_id*. This is a privileged endpoint, and
             requires a management token. *token* will override this client's
             default token. An *ACLPermissionDenied* exception will be raised if
             a management token is not used.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             Returns the string of the newly created *acl_id*.
             """
@@ -1789,14 +2101,22 @@ class Consul(object):
                 return json.loads(response.body)['ID']
 
             return self.agent.http.put(
-                callback, '/v1/acl/clone/%s' % acl_id, params=params)
+                callback, 
+                '/v1/acl/clone/%s' % acl_id,
+                params=params,
+                timeout=timeout)
 
-        def destroy(self, acl_id, token=None):
+        def destroy(self, acl_id, token=None, timeout=None):
             """
             Destroys the ACL token *acl_id*. This is a privileged endpoint, and
             requires a management token. *token* will override this client's
             default token. An *ACLPermissionDenied* exception will be raised if
             a management token is not used.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
 
             Returns *True* on success.
             """
@@ -1813,7 +2133,10 @@ class Consul(object):
                 return json.loads(response.body)
 
             return self.agent.http.put(
-                callback, '/v1/acl/destroy/%s' % acl_id, params=params)
+                callback,
+                '/v1/acl/destroy/%s' % acl_id,
+                params=params,
+                timeout=timeout)
 
     class Status(object):
         """
@@ -1823,18 +2146,30 @@ class Consul(object):
         def __init__(self, agent):
             self.agent = agent
 
-        def leader(self):
+        def leader(self, timeout=None):
             """
             This endpoint is used to get the Raft leader for the datacenter
             in which the agent is running.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
             return self.agent.http.get(
-                lambda x: json.loads(x.body), '/v1/status/leader')
+                lambda x: json.loads(x.body),
+                '/v1/status/leader',
+                timeout=timeout)
 
-        def peers(self):
+        def peers(self, timeout=None):
             """
             This endpoint retrieves the Raft peers for the datacenter in which
             the the agent is running.
+
+            *timeout* is the optional timeout for HTTP requests made to Consul.
+            If None is provided, defaults to timeout value set when
+            instantiating consul instance, or the default value set in
+            requests.
             """
             return self.agent.http.get(
-                lambda x: json.loads(x.body), '/v1/status/peers')
+                lambda x: json.loads(x.body), '/v1/status/peers', timeout=none)
