@@ -1,3 +1,4 @@
+import sys
 import operator
 import struct
 import time
@@ -12,6 +13,10 @@ import requests
 
 Check = consul.Check
 
+rtException = requests.exceptions.ReadTimeout if sys.version_info[0] < 3 \
+              else asyncio.TimeoutError
+ctException = requests.exceptions.ConnectTimeout if sys.version_info[0] < 3 \
+              else asyncio.TimeoutError
 
 class TestHTTPClient(object):
     def test_uri(self):
@@ -27,7 +32,7 @@ class TestConsul(object):
         assert c.kv.put('foo', 'bar') is True
 
         # Make consul wait for 5s, which should cause global timeout exception
-        pytest.raises(requests.exceptions.ReadTimeout, c.kv.get,
+        pytest.raises(rtException, c.kv.get,
                       'foo', index=8, wait='5s')
 
         # Wait for less than timeout, returns content
@@ -39,14 +44,14 @@ class TestConsul(object):
         assert c.kv.put('foo', 'bar') is True
 
         # Wait for less than global timeout but more than local timeout
-        pytest.raises(requests.exceptions.ReadTimeout, c.kv.get,
+        pytest.raises(rtException, c.kv.get,
                       'foo', index=9, wait='5s', timeout=1)
 
     def test_cmd_specific_timeout(self, consul_port):
         c = consul.Consul(port=consul_port)
         assert c.kv.put('foo', 'bar') is True
 
-        pytest.raises(requests.exceptions.ReadTimeout, c.kv.get,
+        pytest.raises(rtException, c.kv.get,
                       'foo', index=15, wait='10s', timeout=1)
 
     def test_cmd_specific_connect_timeout(self):
@@ -54,9 +59,9 @@ class TestConsul(object):
         # than the alternatives
         c = consul.Consul(host='10.179.94.221')
 
-        pytest.raises(requests.exceptions.ConnectTimeout, c.kv.put,
+        pytest.raises(ctException, c.kv.put,
                       'foo', 'bar2', timeout=2)
-        pytest.raises(requests.exceptions.ConnectTimeout, c.kv.delete,
+        pytest.raises(ctException, c.kv.delete,
                       'foo', timeout=2)
 
     def test_kv(self, consul_port):
