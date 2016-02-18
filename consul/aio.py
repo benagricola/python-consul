@@ -40,10 +40,10 @@ class HTTPClient:
 
     @asyncio.coroutine
     def _request(self, callback, method, uri, data=None, timeout=None):
-        resp = yield from aiohttp.request(method, uri,
-                                          connector=self._connector,
-                                          data=data, loop=self._loop,
-                                          timeout=timeout)
+        with aiohttp.Timeout(timeout):
+            resp = yield from aiohttp.request(method, uri,
+                                              connector=self._connector,
+                                              data=data, loop=self._loop)
         body = yield from resp.text(encoding='utf-8')
         if resp.status == 599:
             raise base.Timeout
