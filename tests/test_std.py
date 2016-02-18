@@ -8,6 +8,7 @@ import six
 import consul
 import consul.std
 
+import requests
 
 Check = consul.Check
 
@@ -21,6 +22,43 @@ class TestHTTPClient(object):
 
 
 class TestConsul(object):
+    def test_global_timeout(self, consul_port):
+        c = consul.Consul(port=consul_port, timeout=2)
+        assert c.kv.put('foo', 'bar') is True
+
+        # Make consul wait for 5s, which should cause global timeout exception
+        pytest.raises(requests.exceptions.ReadTimeout, c.kv.get,
+                      'foo', index=8, wait='5s')
+
+        # Wait for less than timeout, returns content
+        index, data = c.kv.get('foo', index=9, wait='1s')
+        assert data['Value'] == six.b('bar')
+
+    def test_cmd_specific_override_timeout(self, consul_port):
+        c = consul.Consul(port=consul_port, timeout=5)
+        assert c.kv.put('foo', 'bar') is True
+
+        # Wait for less than global timeout but more than local timeout
+        pytest.raises(requests.exceptions.ReadTimeout, c.kv.get,
+                      'foo', index=9, wait='3s', timeout=1)
+
+    def test_cmd_specific_timeout(self, consul_port):
+        c = consul.Consul(port=consul_port)
+        assert c.kv.put('foo', 'bar') is True
+
+        pytest.raises(requests.exceptions.ReadTimeout, c.kv.get,
+                      'foo', index=15, wait='3s', timeout=1)
+
+    def test_cmd_specific_connect_timeout(self, consul_port):
+        c = consul.Consul(port=consul_port)
+
+        # Wait nonzero but tiny timeout to trigger a ConnectTimeout
+        # TODO: Find a way to test this reliably, not timing based ;/
+        pytest.raises(requests.exceptions.ConnectTimeout, c.kv.put,
+                      'foo', 'bar2', timeout=0.00000001)
+        pytest.raises(requests.exceptions.ConnectTimeout, c.kv.delete,
+                      'foo', timeout=0.000000001)
+
     def test_kv(self, consul_port):
         c = consul.Consul(port=consul_port)
         index, data = c.kv.get('foo')
@@ -807,7 +845,7 @@ class TestConsul(object):
             set(['anonymous', master_token])
 
     def test_status_leader(self, consul_port):
-        c = consul.Consul(port=consul_port)
+        c = consul.Consul(port=consul_port, timeout=5)
 
         agent_self = c.agent.self()
         port = agent_self['Config']['Ports']['Server']
@@ -822,7 +860,7 @@ class TestConsul(object):
 
     def test_status_peers(self, consul_port):
 
-        c = consul.Consul(port=consul_port)
+        c = consul.Consul(port=consul_port, timeout=5)
 
         agent_self = c.agent.self()
         port = agent_self['Config']['Ports']['Server']

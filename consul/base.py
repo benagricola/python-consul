@@ -280,7 +280,10 @@ class Consul(object):
 
             return self.agent.http.put(
                 callback(is_json=True),
-                '/v1/event/fire/%s' % name, params=params, data=body, timeout=timeout)
+                '/v1/event/fire/%s' % name,
+                params=params,
+                data=body,
+                timeout=timeout)
 
         def list(
                 self,
@@ -344,7 +347,7 @@ class Consul(object):
                 return response.headers['X-Consul-Index'], data
 
             return self.agent.http.get(
-                callback, '/v1/event/list', params=params,timeout=timeout)
+                callback, '/v1/event/list', params=params, timeout=timeout)
 
     class KV(object):
         """
@@ -524,9 +527,19 @@ class Consul(object):
                 params['dc'] = dc
             return self.agent.http.put(
                 callback(is_json=True),
-                '/v1/kv/%s' % key, params=params, data=value, timeout=timeout)
+                '/v1/kv/%s' % key,
+                params=params,
+                data=value,
+                timeout=timeout)
 
-        def delete(self, key, recurse=None, cas=None, token=None, dc=None, timeout=None):
+        def delete(
+                self,
+                key,
+                recurse=None,
+                cas=None,
+                token=None,
+                dc=None,
+                timeout=None):
             """
             Deletes a single key or if *recurse* is True, all keys sharing a
             prefix.
@@ -585,7 +598,7 @@ class Consul(object):
             self.service = Consul.Agent.Service(agent)
             self.check = Consul.Agent.Check(agent)
 
-        def self(self,timeout=None):
+        def self(self, timeout=None):
             """
             Returns configuration of the local agent and member information.
 
@@ -595,9 +608,11 @@ class Consul(object):
             requests.
             """
             return self.agent.http.get(
-                lambda x: json.loads(x.body), '/v1/agent/self', timeout=timeout)
+                lambda x: json.loads(x.body),
+                '/v1/agent/self',
+                timeout=timeout)
 
-        def services(self,timeout=None):
+        def services(self, timeout=None):
             """
             *timeout* is the optional timeout for HTTP requests made to Consul.
             If None is provided, defaults to timeout value set when
@@ -614,9 +629,11 @@ class Consul(object):
             within a few seconds.
             """
             return self.agent.http.get(
-                lambda x: json.loads(x.body), '/v1/agent/services', timeout=timeout)
+                lambda x: json.loads(x.body),
+                '/v1/agent/services',
+                timeout=timeout)
 
-        def checks(self,timeout=None):
+        def checks(self, timeout=None):
             """
             *timeout* is the optional timeout for HTTP requests made to Consul.
             If None is provided, defaults to timeout value set when
@@ -633,7 +650,9 @@ class Consul(object):
             within a few seconds.
             """
             return self.agent.http.get(
-                lambda x: json.loads(x.body), '/v1/agent/checks', timeout=timeout)
+                lambda x: json.loads(x.body),
+                '/v1/agent/checks',
+                timeout=timeout)
 
         def members(self, wan=False, timeout=None):
             """
@@ -657,7 +676,8 @@ class Consul(object):
             return self.agent.http.get(
                 lambda x: json.loads(x.body),
                 '/v1/agent/members',
-                params=params,timeout=timeout)
+                params=params,
+                timeout=timeout)
 
         def maintenance(self, enable, reason=None, timeout=None):
             """
@@ -794,7 +814,7 @@ class Consul(object):
                 if tags:
                     payload['tags'] = tags
 
-                # If new 'check' object is used, treat timeout field as 
+                # If new 'check' object is used, treat timeout field as
                 # http timeout for requests. Otherwise set default timeout
                 http_timeout = None
 
@@ -826,16 +846,22 @@ class Consul(object):
                 take care of deregistering the service with the Catalog. If
                 there is an associated check, that is also deregistered.
 
-                *timeout* is the optional timeout for HTTP requests made to Consul.
-                If None is provided, defaults to timeout value set when
+                *timeout* is the optional timeout for HTTP requests made to
+                Consul. If None is provided, defaults to timeout value set when
                 instantiating consul instance, or the default value set in
                 requests.
                 """
                 return self.agent.http.get(
                     lambda x: x.code == 200,
-                    '/v1/agent/service/deregister/%s' % service_id, timeout=timeout)
+                    '/v1/agent/service/deregister/%s' % service_id,
+                    timeout=timeout)
 
-            def maintenance(self, service_id, enable, reason=None, timeout=None):
+            def maintenance(
+                    self,
+                    service_id,
+                    enable,
+                    reason=None,
+                    timeout=None):
                 """
                 The service maintenance endpoint allows placing a given service
                 into "maintenance mode".
@@ -849,8 +875,8 @@ class Consul(object):
                 *reason* is an optional string. This is simply to aid human
                 operators.
 
-                *timeout* is the optional timeout for HTTP requests made to Consul.
-                If None is provided, defaults to timeout value set when
+                *timeout* is the optional timeout for HTTP requests made to
+                Consul. If None is provided, defaults to timeout value set when
                 instantiating consul instance, or the default value set in
                 requests.
                 """
@@ -923,7 +949,7 @@ class Consul(object):
                 assert check or script or ttl or http, \
                     'check is required'
 
-                # If new 'check' object is used, treat timeout field as 
+                # If new 'check' object is used, treat timeout field as
                 # http timeout for requests. Otherwise set default timeout
                 http_timeout = None
 
@@ -962,8 +988,8 @@ class Consul(object):
                 """
                 Remove a check from the local agent.
 
-                *timeout* is the optional timeout for HTTP requests made to Consul.
-                If None is provided, defaults to timeout value set when
+                *timeout* is the optional timeout for HTTP requests made to
+                Consul. If None is provided, defaults to timeout value set when
                 instantiating consul instance, or the default value set in
                 requests.
                 """
@@ -977,8 +1003,8 @@ class Consul(object):
                 Mark a ttl based check as passing. Optional notes can be
                 attached to describe the status of the check.
 
-                *timeout* is the optional timeout for HTTP requests made to Consul.
-                If None is provided, defaults to timeout value set when
+                *timeout* is the optional timeout for HTTP requests made to
+                Consul. If None is provided, defaults to timeout value set when
                 instantiating consul instance, or the default value set in
                 requests.
                 """
@@ -998,8 +1024,8 @@ class Consul(object):
                 attached to describe why check is failing. The status of the
                 check will be set to critical and the ttl clock will be reset.
 
-                *timeout* is the optional timeout for HTTP requests made to Consul.
-                If None is provided, defaults to timeout value set when
+                *timeout* is the optional timeout for HTTP requests made to
+                Consul. If None is provided, defaults to timeout value set when
                 instantiating consul instance, or the default value set in
                 requests.
                 """
@@ -1019,8 +1045,8 @@ class Consul(object):
                 attached to describe the warning. The status of the
                 check will be set to warn and the ttl clock will be reset.
 
-                *timeout* is the optional timeout for HTTP requests made to Consul.
-                If None is provided, defaults to timeout value set when
+                *timeout* is the optional timeout for HTTP requests made to
+                Consul. If None is provided, defaults to timeout value set when
                 instantiating consul instance, or the default value set in
                 requests.
                 """
@@ -1038,7 +1064,14 @@ class Consul(object):
         def __init__(self, agent):
             self.agent = agent
 
-        def register(self, node, address, service=None, check=None, dc=None, timeout=None):
+        def register(
+                self,
+                node,
+                address,
+                service=None,
+                check=None,
+                dc=None,
+                timeout=None):
             """
             A low level mechanism for directly registering or updating entries
             in the catalog. It is usually recommended to use
@@ -1467,11 +1500,17 @@ class Consul(object):
 
             return self.agent.http.get(
                 callback,
-                '/v1/health/service/%s' % service, 
-                params=params, 
+                '/v1/health/service/%s' % service,
+                params=params,
                 timeout=timeout)
 
-        def checks(self, service, index=None, wait=None, dc=None, timeout=None):
+        def checks(
+                self,
+                service,
+                index=None,
+                wait=None,
+                dc=None,
+                timeout=None):
             """
             Returns a tuple of (*index*, *checks*) with *checks* being the
             checks associated with the service.
@@ -1673,7 +1712,10 @@ class Consul(object):
                 data = ''
             return self.agent.http.put(
                 callback(lambda x: json.loads(x.body)['ID']),
-                '/v1/session/create', params=params, data=data, timeout=timeout)
+                '/v1/session/create',
+                params=params,
+                data=data,
+                timeout=timeout)
 
         def destroy(self, session_id, dc=None, timeout=None):
             """
@@ -1896,8 +1938,8 @@ class Consul(object):
                 return json.loads(response.body)
 
             return self.agent.http.get(
-                callback, 
-                '/v1/acl/list', 
+                callback,
+                '/v1/acl/list',
                 params=params,
                 timeout=timeout)
 
@@ -2101,7 +2143,7 @@ class Consul(object):
                 return json.loads(response.body)['ID']
 
             return self.agent.http.put(
-                callback, 
+                callback,
                 '/v1/acl/clone/%s' % acl_id,
                 params=params,
                 timeout=timeout)
@@ -2172,4 +2214,6 @@ class Consul(object):
             requests.
             """
             return self.agent.http.get(
-                lambda x: json.loads(x.body), '/v1/status/peers', timeout=none)
+                lambda x: json.loads(x.body),
+                '/v1/status/peers',
+                timeout=timeout)

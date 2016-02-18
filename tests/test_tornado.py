@@ -32,7 +32,7 @@ class TestConsul(object):
     def test_kv(self, loop, consul_port):
         @gen.coroutine
         def main():
-            c = consul.tornado.Consul(port=consul_port)
+            c = consul.tornado.Consul(port=consul_port, timeout=5)
             index, data = yield c.kv.get('foo')
             assert data is None
             response = yield c.kv.put('foo', 'bar')
@@ -45,7 +45,7 @@ class TestConsul(object):
     def test_kv_binary(self, loop, consul_port):
         @gen.coroutine
         def main():
-            c = consul.tornado.Consul(port=consul_port)
+            c = consul.tornado.Consul(port=consul_port, timeout=5)
             yield c.kv.put('foo', struct.pack('i', 1000))
             index, data = yield c.kv.get('foo')
             assert struct.unpack('i', data['Value']) == (1000,)
@@ -53,7 +53,7 @@ class TestConsul(object):
         loop.run_sync(main)
 
     def test_kv_missing(self, loop, consul_port):
-        c = consul.tornado.Consul(port=consul_port)
+        c = consul.tornado.Consul(port=consul_port, timeout=5)
 
         @gen.coroutine
         def main():

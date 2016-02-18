@@ -10,7 +10,7 @@ __all__ = ['Consul']
 
 class HTTPClient(object):
     def __init__(self, host='127.0.0.1', port=8500, scheme='http',
-                 verify=True,timeout=None):
+                 verify=True, timeout=None):
         self.host = host
         self.port = port
         self.scheme = scheme
@@ -39,7 +39,11 @@ class HTTPClient(object):
         uri = self.uri(path, params)
         timeout = timeout if timeout else self.timeout
         return callback(self.response(
-            self.session.put(uri, data=data, verify=self.verify, timeout=timeout)))
+            self.session.put(
+                uri,
+                data=data,
+                verify=self.verify,
+                timeout=timeout)))
 
     def delete(self, callback, path, params=None, timeout=None):
         uri = self.uri(path, params)

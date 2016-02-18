@@ -65,7 +65,8 @@ def start_consul_instance(acl_master_token=None):
         postfix = 'linux64'
     bin = os.path.join(os.path.dirname(__file__), 'consul.'+postfix)
     command = """
-        {bin} agent -server -bootstrap -config-dir=. -data-dir=./data
+        {bin} agent -server -bind 127.0.0.1
+        -bootstrap -config-dir=. -data-dir=./data
     """.format(bin=bin).strip()
     command = shlex.split(command)
 
