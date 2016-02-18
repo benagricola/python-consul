@@ -49,15 +49,15 @@ class TestConsul(object):
         pytest.raises(requests.exceptions.ReadTimeout, c.kv.get,
                       'foo', index=15, wait='3s', timeout=1)
 
-    def test_cmd_specific_connect_timeout(self, consul_port):
-        c = consul.Consul(port=consul_port)
+    def test_cmd_specific_connect_timeout(self):
+        # Attempt connection to unroutable IP. Not foolproof, but better
+        # than the alternatives
+        c = consul.Consul(host='10.179.94.221')
 
-        # Wait nonzero but tiny timeout to trigger a ConnectTimeout
-        # TODO: Find a way to test this reliably, not timing based ;/
         pytest.raises(requests.exceptions.ConnectTimeout, c.kv.put,
-                      'foo', 'bar2', timeout=0.00000001)
+                      'foo', 'bar2', timeout=2)
         pytest.raises(requests.exceptions.ConnectTimeout, c.kv.delete,
-                      'foo', timeout=0.000000001)
+                      'foo', timeout=2)
 
     def test_kv(self, consul_port):
         c = consul.Consul(port=consul_port)
