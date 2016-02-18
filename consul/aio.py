@@ -40,7 +40,12 @@ class HTTPClient:
 
     @asyncio.coroutine
     def _request(self, callback, method, uri, data=None, timeout=None):
-        with aiohttp.Timeout(timeout):
+        if timeout:
+            with aiohttp.Timeout(timeout, loop=self._loop):
+                resp = yield from aiohttp.request(method, uri,
+                                                  connector=self._connector,
+                                                  data=data, loop=self._loop)
+        else:
             resp = yield from aiohttp.request(method, uri,
                                               connector=self._connector,
                                               data=data, loop=self._loop)
