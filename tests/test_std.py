@@ -35,19 +35,19 @@ class TestConsul(object):
         assert data['Value'] == six.b('bar')
 
     def test_cmd_specific_override_timeout(self, consul_port):
-        c = consul.Consul(port=consul_port, timeout=5)
+        c = consul.Consul(port=consul_port, timeout=10)
         assert c.kv.put('foo', 'bar') is True
 
         # Wait for less than global timeout but more than local timeout
         pytest.raises(requests.exceptions.ReadTimeout, c.kv.get,
-                      'foo', index=9, wait='3s', timeout=1)
+                      'foo', index=9, wait='5s', timeout=1)
 
     def test_cmd_specific_timeout(self, consul_port):
         c = consul.Consul(port=consul_port)
         assert c.kv.put('foo', 'bar') is True
 
         pytest.raises(requests.exceptions.ReadTimeout, c.kv.get,
-                      'foo', index=15, wait='3s', timeout=1)
+                      'foo', index=15, wait='10s', timeout=1)
 
     def test_cmd_specific_connect_timeout(self):
         # Attempt connection to unroutable IP. Not foolproof, but better

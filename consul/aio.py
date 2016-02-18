@@ -58,7 +58,7 @@ class HTTPClient:
                               ResourceWarning)
                 self.close()
 
-    def get(self, callback, path, params=None, timeout=None)
+    def get(self, callback, path, params=None, timeout=None):
         uri = self._uri(path, params)
         timeout = timeout if timeout else self.timeout
         return self._request(callback, 'GET', uri, timeout=timeout)
