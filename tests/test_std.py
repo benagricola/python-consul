@@ -18,9 +18,9 @@ PY_3 = sys.version_info >= (3, 0, 0)
 if PY_3:
     import asyncio
 
+rtExc = asyncio.TimeoutError if PY_3 else requests.exceptions.ReadTimeout
+ctExc = asyncio.TimeoutError if PY_3 else requests.exceptions.ConnectTimeout
 
-rtExc = requests.exceptions.ReadTimeout if PY_3 else asyncio.TimeoutError
-ctExc = requests.exceptions.ConnectTimeout if PY_3 else asyncio.TimeoutError
 
 class TestHTTPClient(object):
     def test_uri(self):
