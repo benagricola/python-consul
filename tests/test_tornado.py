@@ -42,11 +42,11 @@ class TestConsul(object):
             index, data = yield c.kv.get('gt1')
             index = int(index)
 
-            # Make consul wait for 5s, which should cause global timeout 
+            # Make consul wait for 5s, which should cause global timeout
             try:
                 _, data = yield c.kv.get('gt1', index=index+1, wait='5s')
             except base.Timeout:
-                pass # Expected Timeout
+                pass  # Expected Timeout
 
             # Wait for less than timeout, returns content
             _, data = yield c.kv.get('gt1', index=index+2, wait='1s')
@@ -70,9 +70,8 @@ class TestConsul(object):
             try:
                 _, data = yield c.kv.get('gt2', index=index+1, wait='5s')
             except base.Timeout:
-                pass # Expected Timeout
+                pass  # Expected Timeout
             loop.stop()
-
         loop.run_sync(main)
 
     def test_cmd_specific_timeout(self, loop, consul_port):
@@ -89,11 +88,13 @@ class TestConsul(object):
 
             # Make consul wait for 5s, which should cause local timeout
             try:
-                _, data = yield c.kv.get('gt3', index=index+1, wait='5s', timeout=1)
+                _, data = yield c.kv.get('gt3',
+                                         index=index+1,
+                                         wait='5s',
+                                         timeout=1)
             except base.Timeout:
-                pass # Expected Timeout
+                pass  # Expected Timeout
             loop.stop()
-
         loop.run_sync(main)
 
     def test_cmd_specific_connect_timeout(self, loop, consul_port):
@@ -101,19 +102,19 @@ class TestConsul(object):
         @gen.coroutine
         def main():
             try:
-                c = consul.tornado.Consul(host='10.179.94.221',port=consul_port)
-                response = yield c.kv.put('gt4', 'bar2', timeout=2)
+                c = consul.tornado.Consul(host='10.179.94.221',
+                                          port=consul_port)
+                yield c.kv.put('gt4', 'bar2', timeout=2)
             except base.Timeout:
-                pass # Expected Timeout
+                pass  # Expected Timeout
 
             try:
-                c = consul.tornado.Consul(host='10.179.94.221',port=consul_port)
-                response = yield c.kv.delete('gt5', 'bar2', timeout=2)
+                c = consul.tornado.Consul(host='10.179.94.221',
+                                          port=consul_port)
+                yield c.kv.delete('gt5', 'bar2', timeout=2)
             except base.Timeout:
-                pass # Expected Timeout
+                pass  # Expected Timeout
             loop.stop()
-
-
         loop.run_sync(main)
 
     def test_kv(self, loop, consul_port):

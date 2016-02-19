@@ -72,10 +72,9 @@ class TestAsyncioConsul(object):
             try:
                 _, data = yield from c.kv.get('gt2', index=index+1, wait='5s')
             except base.Timeout:
-                pass # Expected Timeout
+                pass  # Expected Timeout
 
             c.close()
-
         loop.run_until_complete(main())
 
     def test_asyncio_cmd_specific_timeout(self, loop, consul_port):
@@ -92,9 +91,12 @@ class TestAsyncioConsul(object):
 
             # Make consul wait for 5s, which should cause local timeout
             try:
-                _, data = yield from c.kv.get('gt3', index=index+1, wait='5s', timeout=1)
+                _, data = yield from c.kv.get('gt3',
+                                              index=index+1,
+                                              wait='5s',
+                                              timeout=1)
             except base.Timeout:
-                pass # Expected Timeout
+                pass  # Expected Timeout
 
             c.close()
 
@@ -105,16 +107,20 @@ class TestAsyncioConsul(object):
         @asyncio.coroutine
         def main():
             try:
-                c = consul.aio.Consul(host='10.179.94.221',port=consul_port, loop=loop)
+                c = consul.aio.Consul(host='10.179.94.221',
+                                      port=consul_port,
+                                      loop=loop)
                 response = yield from c.kv.put('gt4', 'bar2', timeout=2)
             except base.Timeout:
-                pass # Expected Timeout
+                pass  # Expected Timeout
 
             try:
-                c = consul.aio.Consul(host='10.179.94.221',port=consul_port, loop=loop)
+                c = consul.aio.Consul(host='10.179.94.221',
+                                      port=consul_port,
+                                      loop=loop)
                 response = yield from c.kv.delete('gt5', 'bar2', timeout=2)
             except base.Timeout:
-                pass # Expected Timeout
+                pass  # Expected Timeout
 
 
         loop.run_until_complete(main())
