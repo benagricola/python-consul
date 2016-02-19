@@ -10,6 +10,8 @@ from tornado import gen
 import consul
 import consul.tornado
 
+import consul.base as base
+
 
 Check = consul.Check
 
@@ -29,6 +31,91 @@ def sleep(loop, s):
 
 
 class TestConsul(object):
+    def test_global_timeout(self, loop, consul_port):
+        @gen.coroutine
+        def main():
+            c = consul.tornado.Consul(port=consul_port, timeout=2)
+            response = yield c.kv.put('gt1', 'bar')
+            assert response is True
+
+            # Get index for blocking requests
+            index, data = yield c.kv.get('gt1')
+            index = int(index)
+
+            # Make consul wait for 5s, which should cause global timeout 
+            try:
+                _, data = yield c.kv.get('gt1', index=index+1, wait='5s')
+            except base.Timeout:
+                pass # Expected Timeout
+
+            # Wait for less than timeout, returns content
+            _, data = yield c.kv.get('gt1', index=index+2, wait='1s')
+            assert data['Value'] == six.b('bar')
+            loop.stop()
+        loop.run_sync(main)
+
+    def test_cmd_specific_override_timeout(self, loop, consul_port):
+
+        @gen.coroutine
+        def main():
+            c = consul.tornado.Consul(port=consul_port, timeout=10)
+            response = yield c.kv.put('gt2', 'bar')
+            assert response is True
+
+            # Get index for blocking requests
+            index, data = yield c.kv.get('gt2')
+            index = int(index)
+
+            # Make consul wait for 5s, which should cause local timeout
+            try:
+                _, data = yield c.kv.get('gt2', index=index+1, wait='5s')
+            except base.Timeout:
+                pass # Expected Timeout
+            loop.stop()
+
+        loop.run_sync(main)
+
+    def test_cmd_specific_timeout(self, loop, consul_port):
+
+        @gen.coroutine
+        def main():
+            c = consul.tornado.Consul(port=consul_port)
+            response = yield c.kv.put('gt3', 'bar')
+            assert response is True
+
+            # Get index for blocking requests
+            index, data = yield c.kv.get('gt3')
+            index = int(index)
+
+            # Make consul wait for 5s, which should cause local timeout
+            try:
+                _, data = yield c.kv.get('gt3', index=index+1, wait='5s', timeout=1)
+            except base.Timeout:
+                pass # Expected Timeout
+            loop.stop()
+
+        loop.run_sync(main)
+
+    def test_cmd_specific_connect_timeout(self, loop, consul_port):
+
+        @gen.coroutine
+        def main():
+            try:
+                c = consul.tornado.Consul(host='10.179.94.221',port=consul_port)
+                response = yield c.kv.put('gt4', 'bar2', timeout=2)
+            except base.Timeout:
+                pass # Expected Timeout
+
+            try:
+                c = consul.tornado.Consul(host='10.179.94.221',port=consul_port)
+                response = yield c.kv.delete('gt5', 'bar2', timeout=2)
+            except base.Timeout:
+                pass # Expected Timeout
+            loop.stop()
+
+
+        loop.run_sync(main)
+
     def test_kv(self, loop, consul_port):
         @gen.coroutine
         def main():
