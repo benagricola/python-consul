@@ -4,6 +4,8 @@ import requests
 
 from consul import base
 
+ReadTimeout = requests.exceptions.ReadTimeout
+ConnectTimeout = requests.exceptions.ConnectTimeout
 
 __all__ = ['Consul']
 
@@ -32,24 +34,33 @@ class HTTPClient(object):
     def get(self, callback, path, params=None, timeout=None):
         uri = self.uri(path, params)
         timeout = timeout if timeout else self.timeout
-        return callback(self.response(
-            self.session.get(uri, verify=self.verify, timeout=timeout)))
+        try:
+            return callback(self.response(
+                self.session.get(uri, verify=self.verify, timeout=timeout)))
+        except (ConnectTimeout, ReadTimeout):
+            raise base.Timeout
 
     def put(self, callback, path, params=None, data='', timeout=None):
         uri = self.uri(path, params)
         timeout = timeout if timeout else self.timeout
-        return callback(self.response(
-            self.session.put(
-                uri,
-                data=data,
-                verify=self.verify,
-                timeout=timeout)))
+        try:
+            return callback(self.response(
+                self.session.put(
+                    uri,
+                    data=data,
+                    verify=self.verify,
+                    timeout=timeout)))
+        except (ConnectTimeout, ReadTimeout):
+            raise base.Timeout
 
     def delete(self, callback, path, params=None, timeout=None):
         uri = self.uri(path, params)
         timeout = timeout if timeout else self.timeout
-        return callback(self.response(
-            self.session.delete(uri, verify=self.verify, timeout=timeout)))
+        try:
+            return callback(self.response(
+                self.session.delete(uri, verify=self.verify, timeout=timeout)))
+        except (ConnectTimeout, ReadTimeout):
+            raise base.Timeout
 
 
 class Consul(base.Consul):

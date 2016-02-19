@@ -40,20 +40,24 @@ class HTTPClient:
 
     @asyncio.coroutine
     def _request(self, callback, method, uri, data=None, timeout=None):
-        if timeout:
-            with aiohttp.Timeout(timeout, loop=self._loop):
+        try:
+            if timeout:
+                with aiohttp.Timeout(timeout, loop=self._loop):
+                    resp = yield from aiohttp.request(method, uri,
+                                                      connector=self._connector,
+                                                      data=data,
+                                                      loop=self._loop)
+            else:
                 resp = yield from aiohttp.request(method, uri,
                                                   connector=self._connector,
                                                   data=data, loop=self._loop)
-        else:
-            resp = yield from aiohttp.request(method, uri,
-                                              connector=self._connector,
-                                              data=data, loop=self._loop)
-        body = yield from resp.text(encoding='utf-8')
-        if resp.status == 599:
+            body = yield from resp.text(encoding='utf-8')
+            if resp.status == 599:
+                raise base.Timeout
+            r = base.Response(resp.status, resp.headers, body)
+            return callback(r)
+        except (asyncio.TimeoutError):
             raise base.Timeout
-        r = base.Response(resp.status, resp.headers, body)
-        return callback(r)
 
     # python prior 3.4.1 does not play nice with __del__ method
     if PY_341:  # pragma: no branch
