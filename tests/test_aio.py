@@ -4,7 +4,6 @@ import struct
 import sys
 
 import asyncio
-import aiohttp
 import consul
 import consul.aio
 import consul.base as base
@@ -39,11 +38,11 @@ class TestAsyncioConsul(object):
             index, data = yield from c.kv.get('gt1')
             index = int(index)
 
-            # Make consul wait for 5s, which should cause global timeout exception
+            # Make consul wait for 5s, which should cause global timeout
             try:
                 _, data = yield from c.kv.get('gt1', index=index+1, wait='5s')
             except base.Timeout:
-                pass # Expected Timeout
+                pass  # Expected Timeout
 
             # Reconnect, AIO closes the session
             c = consul.aio.Consul(port=consul_port, loop=loop, timeout=2)
@@ -110,7 +109,7 @@ class TestAsyncioConsul(object):
                 c = consul.aio.Consul(host='10.179.94.221',
                                       port=consul_port,
                                       loop=loop)
-                response = yield from c.kv.put('gt4', 'bar2', timeout=2)
+                yield from c.kv.put('gt4', 'bar2', timeout=2)
             except base.Timeout:
                 pass  # Expected Timeout
 
@@ -118,10 +117,9 @@ class TestAsyncioConsul(object):
                 c = consul.aio.Consul(host='10.179.94.221',
                                       port=consul_port,
                                       loop=loop)
-                response = yield from c.kv.delete('gt5', 'bar2', timeout=2)
+                yield from c.kv.delete('gt5', 'bar2', timeout=2)
             except base.Timeout:
                 pass  # Expected Timeout
-
 
         loop.run_until_complete(main())
 
