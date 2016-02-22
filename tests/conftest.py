@@ -77,7 +77,7 @@ def start_consul_instance(acl_master_token=None):
     base_uri = 'http://127.0.0.1:%s/v1/' % ports['http']
 
     while True:
-        time.sleep(0.1)
+        time.sleep(0.2)
         try:
             response = requests.get(base_uri + 'status/leader')
         except requests.ConnectionError:
@@ -91,7 +91,7 @@ def start_consul_instance(acl_master_token=None):
         response = requests.get(base_uri + 'health/service/foo')
         if response.text.strip() != '[]':
             break
-        time.sleep(0.1)
+        time.sleep(0.2)
 
     requests.get(base_uri + 'agent/service/deregister/foo')
     # phew
